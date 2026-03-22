@@ -18,15 +18,15 @@ EMAILJS_TEMPLATE_ID = "template_9errptn"
 EMAILJS_PUBLIC_KEY = "azdoAUitATQqW6aeO"
 EMAILJS_PRIVATE_KEY = "hw1FGHdZIdByi6gExYk7D"
 
-# JSONBin.io config (set these env vars in Render)
-JSONBIN_BIN_ID = os.environ.get("JSONBIN_BIN_ID", "")
-JSONBIN_API_KEY = os.environ.get("JSONBIN_API_KEY", "")
+# JSONBin.io config
+JSONBIN_BIN_ID = "69c02266aa77b81da90aeb67"
+JSONBIN_MASTER_KEY = "$2a$10$yCosrTLtckpRzICZbt68berYvUhj8QqIOiMJKPwyKjrUNsaZTek4q"
 JSONBIN_URL = f"https://api.jsonbin.io/v3/b/{JSONBIN_BIN_ID}"
 
 
 def load_subscribers():
     try:
-        r = http_requests.get(JSONBIN_URL, headers={"X-Master-Key": JSONBIN_API_KEY}, timeout=10)
+        r = http_requests.get(JSONBIN_URL, headers={"X-Master-Key": JSONBIN_MASTER_KEY}, timeout=10)
         record = r.json().get("record", {})
         if isinstance(record, list):
             return record
@@ -38,7 +38,7 @@ def load_subscribers():
 def save_subscribers(subs):
     try:
         http_requests.put(JSONBIN_URL, json={"users": subs},
-                         headers={"Content-Type": "application/json", "X-Master-Key": JSONBIN_API_KEY}, timeout=10)
+                         headers={"Content-Type": "application/json", "X-Master-Key": JSONBIN_MASTER_KEY}, timeout=10)
     except Exception as e:
         print(f"Save failed: {e}")
 
@@ -105,7 +105,7 @@ def notify():
 
 @app.route("/health", methods=["GET"])
 def health():
-    return jsonify({"status": "ok", "storage": "jsonbin", "bin_configured": bool(JSONBIN_BIN_ID)})
+    return jsonify({"status": "ok", "storage": "jsonbin"})
 
 
 if __name__ == "__main__":
