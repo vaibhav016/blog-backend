@@ -220,9 +220,14 @@ def debug_git():
     return jsonify(results)
 
 
-# Setup git and pull latest data on startup
-git_setup()
-git_pull()
+import threading
+
+def init_git():
+    """Run git setup and pull in a background thread so it doesn't block server startup."""
+    git_setup()
+    git_pull()
+
+threading.Thread(target=init_git, daemon=True).start()
 
 if __name__ == "__main__":
     print("Blog Subscriber Backend running on http://localhost:5050")
