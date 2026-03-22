@@ -1,13 +1,15 @@
 """
 Blog Subscriber Backend.
-Subscribers stored in MongoDB Atlas.
+Subscribers in MongoDB Atlas. Emails via Gmail SMTP.
 """
 
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from datetime import datetime
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from pymongo import MongoClient
-import requests as http_requests
 
 app = Flask(__name__)
 CORS(app)
@@ -18,11 +20,23 @@ client = MongoClient(MONGO_URI)
 db = client["blog"]
 subscribers = db["subscribers"]
 
-# EmailJS config
-EMAILJS_SERVICE_ID = "service_pqbgayk"
-EMAILJS_TEMPLATE_ID = "template_9errptn"
-EMAILJS_PUBLIC_KEY = "azdoAUitATQqW6aeO"
-EMAILJS_PRIVATE_KEY = "hw1FGHdZIdByi6gExYk7D"
+# Gmail SMTP
+GMAIL_USER = "vaibhavsinghfcos@gmail.com"
+GMAIL_APP_PASSWORD = "umqubaljxhgbcepb"
+GMAIL_FROM_NAME = "Vaibhav Singh's Blog"
+
+
+def send_email(to_email, subject, message):
+    """Send email via Gmail SMTP."""
+    msg = MIMEMultipart()
+    msg["From"] = f"{GMAIL_FROM_NAME} <{GMAIL_USER}>"
+    msg["To"] = to_email
+    msg["Subject"] = subject
+    msg.attach(MIMEText(message, "plain"))
+
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+        server.login(GMAIL_USER, GMAIL_APP_PASSWORD)
+        server.send_message(msg)
 
 
 @app.route("/subscribe", methods=["POST"])
@@ -73,19 +87,28 @@ def notify():
     sent = failed = 0
     for sub in active:
         try:
-            resp = http_requests.post("https://api.emailjs.com/api/v1.0/email/send", json={
-                "service_id": EMAILJS_SERVICE_ID, "template_id": EMAILJS_TEMPLATE_ID,
-                "user_id": EMAILJS_PUBLIC_KEY, "accessToken": EMAILJS_PRIVATE_KEY,
-                "template_params": {"to_email": sub["email"], "subject": subject, "message": message},
-            })
-            if resp.status_code == 200:
-                sent += 1
-            else:
-                failed += 1
-        except:
+            send_email(sub["email"], subject, message)
+            sent += 1
+        except Exception as e:
+            print(f"Failed to send to {sub['email']}: {e}")
             failed += 1
 
     return jsonify({"sent": sent, "failed": failed, "total": len(active)})
+
+
+@app.route("/feedback", methods=["POST"])
+def feedback():
+    data = request.get_json()
+    subject = (data or {}).get("subject", "Blog Feedback")
+    message = (data or {}).get("message", "")
+    if not message:
+        return jsonify({"error": "Message required"}), 400
+
+    try:
+        send_email(GMAIL_USER, subject, message)
+        return jsonify({"message": "Feedback sent!"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/health", methods=["GET"])
