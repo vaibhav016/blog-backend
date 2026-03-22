@@ -197,6 +197,26 @@ def health():
     return jsonify({"status": "ok"})
 
 
+@app.route("/debug-git", methods=["GET"])
+def debug_git():
+    """Check git status and config for debugging."""
+    results = {}
+    for cmd_name, cmd in [
+        ("token_set", ["bash", "-c", "echo ${GITHUB_TOKEN:+yes}"]),
+        ("remote", ["git", "remote", "-v"]),
+        ("status", ["git", "status", "--short"]),
+        ("log", ["git", "log", "--oneline", "-3"]),
+    ]:
+        try:
+            r = subprocess.run(cmd, cwd=REPO_DIR, capture_output=True, timeout=10)
+            results[cmd_name] = r.stdout.decode().strip()
+            if r.stderr.decode().strip():
+                results[cmd_name + "_err"] = r.stderr.decode().strip()
+        except Exception as e:
+            results[cmd_name] = str(e)
+    return jsonify(results)
+
+
 # Setup git and pull latest data on startup
 git_setup()
 git_pull()
