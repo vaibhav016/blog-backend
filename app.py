@@ -7,27 +7,69 @@ Endpoints:
   DELETE /subscribers     — remove a subscriber (admin)
   POST /notify           — send email to all active subscribers (admin)
 
-Stores subscribers in a local JSON file. Uses EmailJS for sending.
+Stores subscribers in subscribers.json, auto-committed to the Git repo
+so data persists across Render redeploys.
+
 Run: python3 app.py
 """
 
 import json
 import os
+import subprocess
 from datetime import datetime
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import requests
+import requests as http_requests
 
 app = Flask(__name__)
 CORS(app)
 
-DATA_FILE = os.path.join(os.path.dirname(__file__), "subscribers.json")
+REPO_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_FILE = os.path.join(REPO_DIR, "subscribers.json")
 
 # EmailJS config
 EMAILJS_SERVICE_ID = "service_pqbgayk"
 EMAILJS_TEMPLATE_ID = "template_9errptn"
 EMAILJS_PUBLIC_KEY = "azdoAUitATQqW6aeO"
 EMAILJS_PRIVATE_KEY = "hw1FGHdZIdByi6gExYk7D"
+
+# Git config for auto-commit
+GIT_REMOTE = os.environ.get("GIT_REMOTE", "origin")
+GIT_BRANCH = os.environ.get("GIT_BRANCH", "master")
+
+
+def git_pull():
+    """Pull latest subscribers.json from repo on startup."""
+    try:
+        subprocess.run(
+            ["git", "pull", GIT_REMOTE, GIT_BRANCH],
+            cwd=REPO_DIR, capture_output=True, timeout=30,
+        )
+    except Exception as e:
+        print(f"Git pull failed: {e}")
+
+
+def git_push_subscribers():
+    """Commit and push subscribers.json to repo."""
+    try:
+        subprocess.run(
+            ["git", "add", "subscribers.json"],
+            cwd=REPO_DIR, capture_output=True,
+        )
+        subprocess.run(
+            ["git", "commit", "-m", f"Update subscribers {datetime.utcnow().strftime('%Y-%m-%d %H:%M')}"],
+            cwd=REPO_DIR, capture_output=True,
+        )
+        result = subprocess.run(
+            ["git", "push", GIT_REMOTE, GIT_BRANCH],
+            cwd=REPO_DIR, capture_output=True, timeout=30,
+        )
+        if result.returncode == 0:
+            print("Subscribers pushed to repo")
+        else:
+            print(f"Git push failed: {result.stderr.decode()}")
+    except Exception as e:
+        print(f"Git push error: {e}")
 
 
 def load_subscribers():
@@ -40,6 +82,7 @@ def load_subscribers():
 def save_subscribers(subs):
     with open(DATA_FILE, "w") as f:
         json.dump(subs, f, indent=2)
+    git_push_subscribers()
 
 
 @app.route("/subscribe", methods=["POST"])
@@ -52,7 +95,6 @@ def subscribe():
 
     subs = load_subscribers()
 
-    # Check duplicate
     if any(s["email"] == email for s in subs):
         return jsonify({"message": "Already subscribed"}), 200
 
@@ -109,7 +151,7 @@ def notify():
 
     for sub in active:
         try:
-            resp = requests.post(
+            resp = http_requests.post(
                 "https://api.emailjs.com/api/v1.0/email/send",
                 json={
                     "service_id": EMAILJS_SERVICE_ID,
@@ -139,6 +181,9 @@ def notify():
 def health():
     return jsonify({"status": "ok"})
 
+
+# Pull latest data on startup
+git_pull()
 
 if __name__ == "__main__":
     print("Blog Subscriber Backend running on http://localhost:5050")
