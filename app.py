@@ -27,6 +27,7 @@ DATA_FILE = os.path.join(os.path.dirname(__file__), "subscribers.json")
 EMAILJS_SERVICE_ID = "service_pqbgayk"
 EMAILJS_TEMPLATE_ID = "template_9errptn"
 EMAILJS_PUBLIC_KEY = "azdoAUitATQqW6aeO"
+EMAILJS_PRIVATE_KEY = "hw1FGHdZIdByi6gExYk7D"
 
 
 def load_subscribers():
@@ -114,6 +115,7 @@ def notify():
                     "service_id": EMAILJS_SERVICE_ID,
                     "template_id": EMAILJS_TEMPLATE_ID,
                     "user_id": EMAILJS_PUBLIC_KEY,
+                    "accessToken": EMAILJS_PRIVATE_KEY,
                     "template_params": {
                         "to_email": sub["email"],
                         "subject": subject,
@@ -124,8 +126,10 @@ def notify():
             if resp.status_code == 200:
                 sent += 1
             else:
+                print(f"EmailJS error for {sub['email']}: {resp.status_code} {resp.text}")
                 failed += 1
-        except Exception:
+        except Exception as e:
+            print(f"Exception for {sub['email']}: {e}")
             failed += 1
 
     return jsonify({"sent": sent, "failed": failed, "total": len(active)})
