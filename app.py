@@ -38,6 +38,21 @@ GIT_REMOTE = os.environ.get("GIT_REMOTE", "origin")
 GIT_BRANCH = os.environ.get("GIT_BRANCH", "master")
 
 
+def git_setup():
+    """Configure git credentials using GITHUB_TOKEN env var."""
+    token = os.environ.get("GITHUB_TOKEN")
+    if token:
+        subprocess.run(["git", "config", "user.email", "vaibhavsinghfcos@gmail.com"], cwd=REPO_DIR, capture_output=True)
+        subprocess.run(["git", "config", "user.name", "Blog Backend"], cwd=REPO_DIR, capture_output=True)
+        subprocess.run(
+            ["git", "remote", "set-url", GIT_REMOTE, f"https://{token}@github.com/vaibhav016/blog-backend.git"],
+            cwd=REPO_DIR, capture_output=True,
+        )
+        print("Git configured with GITHUB_TOKEN")
+    else:
+        print("WARNING: GITHUB_TOKEN not set. Persistence disabled.")
+
+
 def git_pull():
     """Pull latest subscribers.json from repo on startup."""
     try:
@@ -182,7 +197,8 @@ def health():
     return jsonify({"status": "ok"})
 
 
-# Pull latest data on startup
+# Setup git and pull latest data on startup
+git_setup()
 git_pull()
 
 if __name__ == "__main__":
