@@ -44,10 +44,13 @@ def git_setup():
     if token:
         subprocess.run(["git", "config", "user.email", "vaibhavsinghfcos@gmail.com"], cwd=REPO_DIR, capture_output=True)
         subprocess.run(["git", "config", "user.name", "Blog Backend"], cwd=REPO_DIR, capture_output=True)
-        subprocess.run(
-            ["git", "remote", "set-url", GIT_REMOTE, f"https://{token}@github.com/vaibhav016/blog-backend.git"],
-            cwd=REPO_DIR, capture_output=True,
-        )
+        repo_url = f"https://{token}@github.com/vaibhav016/blog-backend.git"
+        # Check if remote exists
+        r = subprocess.run(["git", "remote"], cwd=REPO_DIR, capture_output=True)
+        if GIT_REMOTE in r.stdout.decode():
+            subprocess.run(["git", "remote", "set-url", GIT_REMOTE, repo_url], cwd=REPO_DIR, capture_output=True)
+        else:
+            subprocess.run(["git", "remote", "add", GIT_REMOTE, repo_url], cwd=REPO_DIR, capture_output=True)
         print("Git configured with GITHUB_TOKEN")
     else:
         print("WARNING: GITHUB_TOKEN not set. Persistence disabled.")
