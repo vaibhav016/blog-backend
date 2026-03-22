@@ -27,14 +27,17 @@ JSONBIN_URL = f"https://api.jsonbin.io/v3/b/{JSONBIN_BIN_ID}"
 def load_subscribers():
     try:
         r = http_requests.get(JSONBIN_URL, headers={"X-Master-Key": JSONBIN_API_KEY}, timeout=10)
-        return r.json().get("record", [])
+        record = r.json().get("record", {})
+        if isinstance(record, list):
+            return record
+        return record.get("users", [])
     except:
         return []
 
 
 def save_subscribers(subs):
     try:
-        http_requests.put(JSONBIN_URL, json=subs,
+        http_requests.put(JSONBIN_URL, json={"users": subs},
                          headers={"Content-Type": "application/json", "X-Master-Key": JSONBIN_API_KEY}, timeout=10)
     except Exception as e:
         print(f"Save failed: {e}")
