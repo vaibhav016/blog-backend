@@ -1,46 +1,28 @@
 """
 Blog Subscriber Backend.
-Subscribers stored in JSONBin.io (free, persistent, no database needed).
+Subscribers stored in MongoDB Atlas.
 """
 
-import os
 from datetime import datetime
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+from pymongo import MongoClient
 import requests as http_requests
 
 app = Flask(__name__)
 CORS(app)
+
+# MongoDB Atlas
+MONGO_URI = "mongodb+srv://enriquecool8_db_user:superconcorde@upsc.pfexmr5.mongodb.net/blog?retryWrites=true&w=majority"
+client = MongoClient(MONGO_URI)
+db = client["blog"]
+subscribers = db["subscribers"]
 
 # EmailJS config
 EMAILJS_SERVICE_ID = "service_pqbgayk"
 EMAILJS_TEMPLATE_ID = "template_9errptn"
 EMAILJS_PUBLIC_KEY = "azdoAUitATQqW6aeO"
 EMAILJS_PRIVATE_KEY = "hw1FGHdZIdByi6gExYk7D"
-
-# JSONBin.io config
-JSONBIN_BIN_ID = "69c02266aa77b81da90aeb67"
-JSONBIN_MASTER_KEY = "$2a$10$yCosrTLtckpRzICZbt68berYvUhj8QqIOiMJKPwyKjrUNsaZTek4q"
-JSONBIN_URL = f"https://api.jsonbin.io/v3/b/{JSONBIN_BIN_ID}"
-
-
-def load_subscribers():
-    try:
-        r = http_requests.get(JSONBIN_URL, headers={"X-Master-Key": JSONBIN_MASTER_KEY}, timeout=10)
-        record = r.json().get("record", {})
-        if isinstance(record, list):
-            return record
-        return record.get("users", [])
-    except:
-        return []
-
-
-def save_subscribers(subs):
-    try:
-        http_requests.put(JSONBIN_URL, json={"users": subs},
-                         headers={"Content-Type": "application/json", "X-Master-Key": JSONBIN_MASTER_KEY}, timeout=10)
-    except Exception as e:
-        print(f"Save failed: {e}")
 
 
 @app.route("/subscribe", methods=["POST"])
@@ -50,29 +32,30 @@ def subscribe():
     if not email or "@" not in email:
         return jsonify({"error": "Invalid email"}), 400
 
-    subs = load_subscribers()
-    if any(s["email"] == email for s in subs):
+    if subscribers.find_one({"email": email}):
         return jsonify({"message": "Already subscribed"}), 200
 
-    subs.append({"email": email, "subscribedAt": datetime.utcnow().isoformat(), "active": True})
-    save_subscribers(subs)
-    return jsonify({"message": "Subscribed!", "total": len(subs)}), 201
+    subscribers.insert_one({
+        "email": email,
+        "subscribedAt": datetime.utcnow().isoformat(),
+        "active": True,
+    })
+    return jsonify({"message": "Subscribed!", "total": subscribers.count_documents({})}), 201
 
 
 @app.route("/subscribers", methods=["GET"])
-def list_subscribers():
-    subs = load_subscribers()
-    active = [s for s in subs if s.get("active", True)]
-    return jsonify({"total": len(subs), "active": len(active), "subscribers": subs})
+def list_subs():
+    all_subs = list(subscribers.find({}, {"_id": 0}))
+    active = [s for s in all_subs if s.get("active", True)]
+    return jsonify({"total": len(all_subs), "active": len(active), "subscribers": all_subs})
 
 
 @app.route("/subscribers", methods=["DELETE"])
-def remove_subscriber():
+def remove_sub():
     data = request.get_json()
     email = (data or {}).get("email", "").strip().lower()
-    subs = [s for s in load_subscribers() if s["email"] != email]
-    save_subscribers(subs)
-    return jsonify({"message": f"Removed {email}", "total": len(subs)})
+    subscribers.delete_one({"email": email})
+    return jsonify({"message": f"Removed {email}", "total": subscribers.count_documents({})})
 
 
 @app.route("/notify", methods=["POST"])
@@ -83,7 +66,7 @@ def notify():
     if not subject or not message:
         return jsonify({"error": "Subject and message required"}), 400
 
-    active = [s for s in load_subscribers() if s.get("active", True)]
+    active = list(subscribers.find({"active": True}, {"_id": 0}))
     if not active:
         return jsonify({"error": "No active subscribers"}), 400
 
@@ -95,8 +78,10 @@ def notify():
                 "user_id": EMAILJS_PUBLIC_KEY, "accessToken": EMAILJS_PRIVATE_KEY,
                 "template_params": {"to_email": sub["email"], "subject": subject, "message": message},
             })
-            sent += 1 if resp.status_code == 200 else 0
-            failed += 0 if resp.status_code == 200 else 1
+            if resp.status_code == 200:
+                sent += 1
+            else:
+                failed += 1
         except:
             failed += 1
 
@@ -105,7 +90,11 @@ def notify():
 
 @app.route("/health", methods=["GET"])
 def health():
-    return jsonify({"status": "ok", "storage": "jsonbin"})
+    try:
+        client.admin.command("ping")
+        return jsonify({"status": "ok", "db": "connected"})
+    except:
+        return jsonify({"status": "ok", "db": "disconnected"})
 
 
 if __name__ == "__main__":
